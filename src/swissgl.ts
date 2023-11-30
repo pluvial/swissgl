@@ -258,12 +258,16 @@ function compileProgram(gl: GL, vs: string, fs: string): Program {
   return program;
 }
 
-function guessUniforms(params: Record<string, any>): string {
-  const uni = [];
+type Uniform = TextureSampler | number | boolean | number[] | boolean[] | CpuArray;
+
+type UniformMap = Record<string, Uniform>;
+
+function guessUniforms(params: UniformMap): string {
+  const uni: string[] = [];
   const len2type = { 1: 'float', 2: 'vec2', 3: 'vec3', 4: 'vec4', 9: 'mat3', 16: 'mat4' };
   for (const name in params) {
     const v = params[name];
-    let s = null;
+    let s: string | null = null;
     if (v instanceof TextureSampler) {
       const [type, D] = v.layern ? ['sampler2DArray', '3'] : ['sampler2D', '2'];
       const lookupMacro = v.layern
@@ -323,13 +327,7 @@ function stripVaryings(VP: string): string {
   return VP.replace(/\bvarying\s+\w+/g, '');
 }
 
-function linkShader(
-  gl: GL,
-  uniforms: Record<string, any>,
-  Inc: string[],
-  VP: string,
-  FP: string,
-): Program {
+function linkShader(gl: GL, uniforms: UniformMap, Inc: string[], VP: string, FP: string): Program {
   // @ts-expect-error TODO: fix this
   Inc = Inc.join('\n');
   const defined = definedUniforms([glsl_template, Inc, VP, FP].join('\n'));
@@ -879,7 +877,8 @@ export type Options = {
   Face: 'front' | 'back';
 };
 
-// type Params = Partial<Options & Record<string, any>>;
+// type Params = Partial<Options & Record<string, Uniform>>;
+// export type Params = Partial<Options> & Record<string, Uniform>;
 export type Params = Partial<Options> & Record<string, any>;
 
 export type Target = WebGLTexture | WebGLTexture[] | Spec | HTMLVideoElement;
@@ -898,7 +897,7 @@ function drawQuads(
   target?: Target | null,
 ): TargetResult | undefined {
   const options = {} as Options,
-    uniforms = {} as Uniforms;
+    uniforms = {} as Uniforms & UniformMap;
   for (const p in params) {
     // @ts-expect-error TODO: how to satisfy ts here?
     (OptNames.has(p) ? options : uniforms)[p] = params[p];
@@ -1026,7 +1025,7 @@ export default function SwissGL(canvas_gl: Canvas | GL): SwissGL {
   glsl.shaders = {};
   glsl.buffers = {};
   glsl.reset = () => {
-    const freeProg = (o: WebGLProgram | Record<string, WebGLProgram>) =>
+    const freeProg = (o: WebGLProgram | Shaders) =>
       o instanceof WebGLProgram ? gl.deleteProgram(o) : Object.values(o).forEach(freeProg);
     freeProg(glsl.shaders);
     Object.values(glsl.buffers)
